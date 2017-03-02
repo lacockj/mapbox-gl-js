@@ -8,6 +8,7 @@ const StyleLayer = require('../../../src/style/style_layer');
 const util = require('../../../src/util/util');
 const Evented = require('../../../src/util/evented');
 const window = require('../../../src/util/window');
+const rtlTextPlugin = require('../../../src/source/rtl_text_plugin');
 
 function createStyleJSON(properties) {
     return util.extend({
@@ -53,6 +54,19 @@ test('Style', (t) => {
         const eventedParent = new Evented();
         eventedParent.on('dataloading', t.end);
         new Style(createStyleJSON(), eventedParent);
+    });
+
+    t.test('registers plugin listener', (t) => {
+        t.spy(rtlTextPlugin, 'registerForPluginAvailability');
+        const style = new Style(createStyleJSON());
+        t.spy(style.dispatcher, 'broadcast');
+        t.ok(rtlTextPlugin.registerForPluginAvailability.calledOnce);
+
+        style.on('style.load', () => {
+            rtlTextPlugin.evented.fire('pluginAvailable');
+            t.ok(style.dispatcher.broadcast.calledWith('loadRTLTextPlugin'));
+            t.end();
+        });
     });
 
     t.test('can be constructed from a URL', (t) => {
@@ -188,6 +202,20 @@ test('Style#_remove', (t) => {
             t.spy(sourceCache, 'clearTiles');
             style._remove();
             t.ok(sourceCache.clearTiles.calledOnce);
+            t.end();
+        });
+    });
+
+    t.test('deregisters plugin listener', (t) => {
+        t.spy(rtlTextPlugin, 'registerForPluginAvailability');
+        const style = new Style(createStyleJSON());
+        t.spy(style.dispatcher, 'broadcast');
+
+        style.on('style.load', () => {
+            style._remove();
+
+            rtlTextPlugin.evented.fire('pluginAvailable');
+            t.notOk(style.dispatcher.broadcast.calledWith('loadRTLTextPlugin'));
             t.end();
         });
     });
@@ -1213,6 +1241,16 @@ test('Style#queryRenderedFeatures', (t) => {
         t.test('filters by `layers` option', (t) => {
             const results = style.queryRenderedFeatures([{column: 1, row: 1, zoom: 1}], {layers: ['land']}, 0, 0);
             t.equal(results.length, 2);
+            t.end();
+        });
+
+        t.test('checks type of `layers` option', (t) => {
+            let errors = 0;
+            t.stub(style, 'fire', (type, data) => {
+                if (data.error && data.error.includes('parameters.layers must be an Array.')) errors++;
+            });
+            style.queryRenderedFeatures([{column: 1, row: 1, zoom: 1}], {layers:'string'});
+            t.equals(errors, 1);
             t.end();
         });
 

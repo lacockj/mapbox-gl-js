@@ -78,8 +78,8 @@ class Style extends Evented {
         this.fire('dataloading', {dataType: 'style'});
 
         const self = this;
-        rtlTextPlugin.registerForPluginAvailability((pluginBlobURL) => {
-            self.dispatcher.broadcast('loadRTLTextPlugin', pluginBlobURL, rtlTextPlugin.errorCallback);
+        this._rtlTextPluginCallback = rtlTextPlugin.registerForPluginAvailability((args) => {
+            self.dispatcher.broadcast('loadRTLTextPlugin', args.pluginBlobURL, args.errorCallback);
             for (const id in self.sourceCaches) {
                 self.sourceCaches[id].reload(); // Should be a no-op if the plugin loads before any tiles load
             }
@@ -742,6 +742,10 @@ class Style extends Evented {
 
         const includedSources = {};
         if (params && params.layers) {
+            if (!Array.isArray(params.layers)) {
+                this.fire('error', {error: 'parameters.layers must be an Array.'});
+                return;
+            }
             for (const layerId of params.layers) {
                 const layer = this._layers[layerId];
                 if (!layer) {
@@ -824,6 +828,7 @@ class Style extends Evented {
     }
 
     _remove() {
+        rtlTextPlugin.evented.off('pluginAvailable', this._rtlTextPluginCallback);
         for (const id in this.sourceCaches) {
             this.sourceCaches[id].clearTiles();
         }
